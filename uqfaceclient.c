@@ -11,10 +11,12 @@ const char* const outputArg = "--output";
 const char* const usageErrorMsg
         = "Usage: ./uqfaceclient port [--replacefilename filename] "
           "[--detectimage filename] [--output filename]\n";
+const char* const replaceFileErrorMsg = "uqfaceclient: cannot open the input file \"%s\" for reading\n";
 
 // Error status
 typedef enum {
-    EXIT_USAGE = 19
+    EXIT_USAGE = 19,
+    EXIT_REPLACE_FILE = 14
 } ErrorStatus;
 
 typedef struct {
@@ -111,9 +113,27 @@ CmdLineParams parse_command_line(int argc, char* argv[])
     return params;
 }
 
+// determine_input_source
+//      From the command line parameters (params) determine whether input
+//      is coming from stdin or from a file and return the relevant file handle.
+//      The function will not return if a file-opening error occurs.
+FILE* determine_input_source(CmdLineParams params)
+{
+    FILE* stream = stdin;
+    if (params.replaceFileName) {
+        stream = fopen(params.replaceFileName, "r");
+        if (!stream) {
+            fprintf(stderr, replaceFileErrorMsg, params.replaceFileName);
+            exit(EXIT_REPLACE_FILE);
+        }
+    }
+    return stream;
+}
+
 int main(int argc, char* argv[])
 {
     CmdLineParams params = parse_command_line(argc, argv);
     print_cmd(&params);
+    FILE* inputStream = determine_input_source(params);
 }
 
