@@ -12,11 +12,13 @@ const char* const usageErrorMsg
         = "Usage: ./uqfaceclient port [--replacefilename filename] "
           "[--detectimage filename] [--output filename]\n";
 const char* const replaceFileErrorMsg = "uqfaceclient: cannot open the input file \"%s\" for reading\n";
+const char* const outputFileErrorMsg = "uqfaceclient: cannot open the output file \"%s\" for writing\n";
 
 // Error status
 typedef enum {
     EXIT_USAGE = 19,
-    EXIT_REPLACE_FILE = 14
+    EXIT_REPLACE_FILE = 14,
+    EXIT_OUT_FILE = 11
 } ErrorStatus;
 
 typedef struct {
@@ -130,10 +132,29 @@ FILE* determine_input_source(CmdLineParams params)
     return stream;
 }
 
+// determine_output_source
+//      From the command line parameters (params) determine whether output
+//      is going to stdout or to a file and return the relevant file handle.
+//      The function will not return if a file-writing error occurs.
+FILE* determine_output_source(CmdLineParams params)
+{
+    FILE* output = stdout;
+    if (params.outputFileName) {
+        output = fopen(params.outputFileName, "w");
+        if (!output) {
+            fprintf(stderr, outputFileErrorMsg, params.outputFileName);
+            exit(EXIT_OUT_FILE);
+        }
+    }
+    return output;
+}
+
+
 int main(int argc, char* argv[])
 {
     CmdLineParams params = parse_command_line(argc, argv);
     print_cmd(&params);
     FILE* inputStream = determine_input_source(params);
+    FILE* outputStream = determine_output_source(params);
 }
 
