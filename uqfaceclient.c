@@ -10,7 +10,7 @@ const char* const outputArg = "--output";
 // Error messages
 const char* const usageErrorMsg
         = "Usage: ./uqfaceclient port [--replacefilename filename] "
-          "[--detectimage filename] [--output filename]i\n";
+          "[--detectimage filename] [--output filename]\n";
 
 // Error status
 typedef enum {
@@ -32,13 +32,27 @@ void print_cmd(CmdLineParams* params) {
     printf("    outputFileName: %s\n", params->outputFileName);
 }
 
+/* usage_error()
+ * ------------------
+ * Prints usageErrorMsg to stdout and exits with usage error status.
+ * 
+ * Errors: usageErrorMsg and exit status.
+ */
 void usage_error() {
     fprintf(stdout, usageErrorMsg);
     exit(EXIT_USAGE);
 }
 
+/* check_empty_value()
+ * ------------------ 
+ * Checks if a value is empty string or NULL.
+ *
+ * value: char* value to check.
+ *
+ * Errors: usageErrorMsg and status if true.
+ */
 void check_empty_value(char* value) {
-    if (strcmp(value, "") == 0) {
+    if (strcmp(value, "") == 0 || value == NULL) {
         usage_error();
     }
 }
@@ -64,16 +78,27 @@ CmdLineParams parse_command_line(int argc, char* argv[])
         params.port = argv[0];
         argc--;
         argv++;
+    } else {
+        usage_error();
     }
 
     while (argv[0] && strncmp(argv[0], "--", 2) == 0) {
         if (strcmp(argv[0], replaceArg) == 0 && argv[1] && argv[1][0]) {
+            if (params.replaceFileName != NULL) {
+                usage_error();
+            }
             check_empty_value(argv[1]);
             params.replaceFileName = argv[1];
         } else if (strcmp(argv[0], detectArg) == 0 && argv[1] && argv[1][0]) {
+            if (params.detectFileName != NULL) {
+                usage_error();
+            }
             check_empty_value(argv[1]);
             params.detectFileName = argv[1];
         } else if (strcmp(argv[0], outputArg) == 0 && argv[1] && argv[1][0]) {
+            if (params.outputFileName != NULL) {
+                usage_error();
+            }
             check_empty_value(argv[1]);
             params.outputFileName = argv[1];
         } else {
