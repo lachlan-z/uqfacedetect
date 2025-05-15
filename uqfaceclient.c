@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <netdb.h> 
+#include <unistd.h>
 
 // Command line args
 const char* const replaceArg = "--replacefilename";
@@ -13,12 +15,14 @@ const char* const usageErrorMsg
           "[--detectimage filename] [--output filename]\n";
 const char* const replaceFileErrorMsg = "uqfaceclient: cannot open the input file \"%s\" for reading\n";
 const char* const outputFileErrorMsg = "uqfaceclient: cannot open the output file \"%s\" for writing\n";
+const char* const portFailErrorMsg = "uqfaceclient: cannot connect to the server on port \"%s\"\n";
 
 // Error status
 typedef enum {
     EXIT_USAGE = 19,
     EXIT_REPLACE_FILE = 14,
-    EXIT_OUT_FILE = 11
+    EXIT_OUT_FILE = 11,
+    EXIT_PORT_FAIL = 9
 } ErrorStatus;
 
 typedef struct {
@@ -149,6 +153,26 @@ FILE* determine_output_source(CmdLineParams params)
     return output;
 }
 
+int connect_to_server(char* port) {
+   struct addrinfo* ai = 0;
+   struct addrinfo hints;
+   memset(& hints, 0, sizeof(struct addrinfo));
+   hints.ai_family=AF_INET;        // IPv4, for generic could use AF_UNSPEC
+   hints.ai_socktype=SOCK_STREAM;
+   int err;
+   if ((err=getaddrinfo("localhost", port, &hints, &ai))) {
+         freeaddrinfo(ai);
+         fprintf(stderr, "%s\n", gai_strerror(err));
+         return 1;   // could not work out the address
+   }
+
+   int fd=socket(AF_INET, SOCK_STREAM, 0); // 0 == use default protocol
+   if (connect(fd, ai->ai_addr, sizeof(struct sockaddr))) {
+       fprintf(stderr, portFailErrorMsg, port);
+       exit(EXIT_PORT_FAIL);
+   }
+   return 0;
+}
 
 int main(int argc, char* argv[])
 {
@@ -156,5 +180,6 @@ int main(int argc, char* argv[])
     print_cmd(&params);
     FILE* inputStream = determine_input_source(params);
     FILE* outputStream = determine_output_source(params);
+    connect_to_server(params.port);
 }
 
