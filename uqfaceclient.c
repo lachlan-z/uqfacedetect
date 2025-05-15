@@ -16,13 +16,17 @@ const char* const usageErrorMsg
 const char* const replaceFileErrorMsg = "uqfaceclient: cannot open the input file \"%s\" for reading\n";
 const char* const outputFileErrorMsg = "uqfaceclient: cannot open the output file \"%s\" for writing\n";
 const char* const portFailErrorMsg = "uqfaceclient: cannot connect to the server on port \"%s\"\n";
+const char* const commErrorMsg = "uqfaceclient: a communication error occurred\n";
+const char* const serverErrorMsg = "uqfaceclient: received the following error message: \"%s\"\n"; 
 
 // Error status
 typedef enum {
     EXIT_USAGE = 19,
     EXIT_REPLACE_FILE = 14,
     EXIT_OUT_FILE = 11,
-    EXIT_PORT_FAIL = 9
+    EXIT_PORT_FAIL = 9,
+    EXIT_COMM = 13,
+    EXIT_SERVER = 12
 } ErrorStatus;
 
 typedef struct {
@@ -171,6 +175,19 @@ int connect_to_server(char* port) {
        fprintf(stderr, portFailErrorMsg, port);
        exit(EXIT_PORT_FAIL);
    }
+
+   int fd2=dup(fd);
+   FILE* to=fdopen(fd, "w");
+   FILE* from=fdopen(fd2, "r");
+
+   fprintf(to, "Hello\n");
+   fflush(to);
+   fclose(to);
+
+   char buffer[80];
+   fgets(buffer, 79, from);
+   fclose(from);
+   printf("%s", buffer);
    return 0;
 }
 
