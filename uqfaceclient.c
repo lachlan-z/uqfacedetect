@@ -51,7 +51,7 @@ void print_cmd(CmdLineParams* params) {
  * Errors: usageErrorMsg and exit status.
  */
 void usage_error() {
-    fprintf(stdout, usageErrorMsg);
+    fprintf(stderr, usageErrorMsg);
     exit(EXIT_USAGE);
 }
 
