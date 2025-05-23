@@ -19,6 +19,13 @@ const char* const portFailErrorMsg = "uqfaceclient: cannot connect to the server
 const char* const commErrorMsg = "uqfaceclient: a communication error occurred\n";
 const char* const serverErrorMsg = "uqfaceclient: received the following error message: \"%s\"\n"; 
 
+// Communication protocol structs and constants
+const uint32_t protocolPrefix = 0x23107231;
+const uint8_t protocolDetection = 0;
+const uint8_t protocolReplacement = 1;
+const uint8_t protocolOutput = 2;
+const uint8_t protocolError = 3;
+
 // Error status
 typedef enum {
     EXIT_USAGE = 19,
@@ -94,6 +101,10 @@ CmdLineParams parse_command_line(int argc, char* argv[])
         usage_error();
     }
 
+    if (argv[0] && strncmp(argv[0], "--", 2) != 0) {
+        usage_error();
+    }
+
     while (argv[0] && strncmp(argv[0], "--", 2) == 0) {
         if (strcmp(argv[0], replaceArg) == 0 && argv[1] && argv[1][0]) {
             if (params.replaceFileName != NULL) {
@@ -127,13 +138,13 @@ CmdLineParams parse_command_line(int argc, char* argv[])
 //      From the command line parameters (params) determine whether input
 //      is coming from stdin or from a file and return the relevant file handle.
 //      The function will not return if a file-opening error occurs.
-FILE* determine_input_source(CmdLineParams params)
+FILE* determine_input_source(char* filename)
 {
     FILE* stream = stdin;
-    if (params.replaceFileName) {
-        stream = fopen(params.replaceFileName, "r");
+    if (filename) {
+        stream = fopen(filename, "rb");
         if (!stream) {
-            fprintf(stderr, replaceFileErrorMsg, params.replaceFileName);
+            fprintf(stderr, replaceFileErrorMsg, filename);
             exit(EXIT_REPLACE_FILE);
         }
     }
@@ -148,7 +159,7 @@ FILE* determine_output_source(CmdLineParams params)
 {
     FILE* output = stdout;
     if (params.outputFileName) {
-        output = fopen(params.outputFileName, "w");
+        output = fopen(params.outputFileName, "wb");
         if (!output) {
             fprintf(stderr, outputFileErrorMsg, params.outputFileName);
             exit(EXIT_OUT_FILE);
@@ -167,7 +178,7 @@ int connect_to_server(char* port) {
    if ((err=getaddrinfo("localhost", port, &hints, &ai))) {
          freeaddrinfo(ai);
          fprintf(stderr, "%s\n", gai_strerror(err));
-         return 1;   // could not work out the address
+         return -1;   // could not work out the address
    }
 
    int fd=socket(AF_INET, SOCK_STREAM, 0); // 0 == use default protocol
@@ -175,28 +186,79 @@ int connect_to_server(char* port) {
        fprintf(stderr, portFailErrorMsg, port);
        exit(EXIT_PORT_FAIL);
    }
-
-   int fd2=dup(fd);
-   FILE* to=fdopen(fd, "w");
-   FILE* from=fdopen(fd2, "r");
-
-   fprintf(to, "Hello\n");
-   fflush(to);
-   fclose(to);
-
-   char buffer[80];
-   fgets(buffer, 79, from);
-   fclose(from);
-   printf("%s", buffer);
-   return 0;
+   return fd;
 }
 
-int main(int argc, char* argv[])
-{
+uint8_t* read_data(FILE* file, uint32_t* outputSize) {
+    uint32_t capacity = 1048;
+    uint32_t totalRead = 0;
+    uint8_t* buffer = malloc(capacity);
+
+    while (1) {
+        if (totalRead >= capacity) {
+            capacity *= 2;
+            uint8_t* newBuff = realloc(buffer, capacity);
+            buffer = newBuff;
+        }
+
+        size_t bytesRead = fread(buffer + totalRead, 1, capacity - totalRead, file);
+        if (bytesRead == 0) {
+            break;
+        }
+        totalRead += (uint32_t)bytesRead;
+    }
+    *outputSize = totalRead;
+    return buffer;
+} 
+
+void send_request(int socketFd, uint8_t op, uint8_t* img1Data, uint32_t img1Size, uint8_t* img2Data, uint32_t img2Size) {
+    int sendFd = dup(socketFd);
+    FILE* to = fdopen(sendFd, "wb");
+
+    if (fwrite(&protocolPrefix, sizeof(uint32_t), 1, to) != 1 ||
+        fwrite(&op, sizeof(uint8_t), 1, to) != 1 ||
+        fwrite(&img1Size, sizeof(uint32_t), 1, to) != 1 ||
+        fwrite(img1Data, 1, img1Size, to) != img1Size) {
+        fprintf(stderr, commErrorMsg);
+        exit(EXIT_COMM);
+    }
+
+    if (op == protocolReplacement) {
+        if (fwrite(&img2Size, sizeof(uint32_t), 1, to) != 1 ||
+            fwrite(img2Data, 1, img2Size, to) != img2Size) {
+            fprintf(stderr, commErrorMsg);
+            exit(EXIT_COMM);
+        }
+    }
+}
+
+int main(int argc, char* argv[]) {
     CmdLineParams params = parse_command_line(argc, argv);
-    print_cmd(&params);
-    FILE* inputStream = determine_input_source(params);
-    FILE* outputStream = determine_output_source(params);
-    connect_to_server(params.port);
-}
+    
+    uint8_t operation;
+    FILE* detectInput = NULL;
+    FILE* replaceInput = NULL;
+    uint8_t* img1Data = NULL;
+    uint8_t* img2Data = NULL;
+    uint32_t img1Size = 0; 
+    uint32_t img2Size = 0;
+    FILE* output = determine_output_source(params);
+   
+    if (params.detectFileName && params.replaceFileName) {
+        operation = protocolReplacement;
+        
+        detectInput = determine_input_source(params.detectFileName);
+        replaceInput = determine_input_source(params.replaceFileName);
+        
+        img1Data = read_data(detectInput, &img1Size);
+        img2Data = read_data(replaceInput, &img2Size);
+    } else {
+        operation = protocolDetection;
+        
+        detectInput = determine_input_source(params.detectFileName);
+        img1Data = read_data(detectInput, &img1Size);
+    }    
+    int socketFd = connect_to_server(params.port);
 
+    send_request(socketFd, operation, img1Data, img1Size, img2Data, img2Size);
+}
