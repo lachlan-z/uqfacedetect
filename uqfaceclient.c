@@ -251,7 +251,7 @@ void response_handler(FILE* from, FILE* output) {
             exit(EXIT_COMM);
         }
 
-        uint8_t* image_data;
+        uint8_t* image_data = malloc(image_size);
         if (fread(image_data, 1, image_size, from) != image_size || !image_data) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
