@@ -230,6 +230,57 @@ void send_request(int socketFd, uint8_t op, uint8_t* img1Data, uint32_t img1Size
             exit(EXIT_COMM);
         }
     }
+    fflush(to);
+}
+
+void response_handler(FILE* from, FILE* output) {
+    uint32_t prefix;
+    uint8_t op_type;
+
+    if (fread(&prefix, sizeof(uint32_t), 1, from) != 1 ||
+        fread(&op_type, sizeof(uint8_t), 1, from) != 1 ||
+        prefix != protocolPrefix) {
+        fprintf(stderr, commErrorMsg);
+        exit(EXIT_COMM);
+    }
+
+    if (op_type == protocolOutput) {
+        uint32_t image_size;
+        if (fread(&image_size, sizeof(uint32_t), 1, from) != 1) {
+            fprintf(stderr, commErrorMsg);
+            exit(EXIT_COMM);
+        }
+
+        uint8_t* image_data;
+        if (fread(image_data, 1, image_size, from) != image_size || !image_data) {
+            fprintf(stderr, commErrorMsg);
+            exit(EXIT_COMM);
+        }
+
+        if (fwrite(image_data, 1, image_size, output) != image_size) {
+            fprintf(stderr, commErrorMsg);
+            exit(EXIT_COMM);
+        } 
+    } else if (op_type == protocolError) {
+        uint32_t error_size;
+        if (fread(&error_size, sizeof(uint32_t), 1, from) != 1) {
+            fprintf(stderr, commErrorMsg);
+            exit(EXIT_COMM);
+        }
+
+        char* error_msg = malloc(error_size + 1);
+        if (fread(error_msg, 1, error_size, from) != error_size || !error_msg) {
+            fprintf(stderr, commErrorMsg);
+            exit(EXIT_COMM);
+        }
+
+        error_msg[error_size] = '\0';
+        fprintf(stderr, serverErrorMsg, error_msg);
+        exit(EXIT_SERVER);
+    } else {
+        fprintf(stderr, commErrorMsg);
+        exit(EXIT_COMM);
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -261,4 +312,8 @@ int main(int argc, char* argv[]) {
     int socketFd = connect_to_server(params.port);
 
     send_request(socketFd, operation, img1Data, img1Size, img2Data, img2Size);
+    
+    int receiveFd = dup(socketFd);
+    FILE* from = fdopen(receiveFd, "rb");
+    response_handler(from, output);
 }
