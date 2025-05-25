@@ -294,8 +294,8 @@ int main(int argc, char* argv[]) {
     uint32_t img1Size = 0; 
     uint32_t img2Size = 0;
     FILE* output = determine_output_source(params);
-   
-    if (params.detectFileName && params.replaceFileName) {
+    
+    if (params.replaceFileName) {
         operation = protocolReplacement;
         
         detectInput = determine_input_source(params.detectFileName);
