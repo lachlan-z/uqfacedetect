@@ -30,6 +30,8 @@ const char* const eyesCascadeFilename = "/local/courses/csse2310/resources/a4/ha
 const char* const usageErrorMsg
         = "Usage: ./uqfacedetect connectionlimit maxsize [port]\n";
 const char* const imageFileErrorMsg = "uqfacedetect: cannot open image file for writing\n";
+const char* const cascadeErrorMsg = "uqfacedetect: unable to load a cascade classifier\n";
+const char* const portErrorMsg = "uqfacedetect: unable to listen on given port \"%s\"\n";
 
 // Communication protocol constants
 const uint32_t protocolPrefix = 0x23107231;
@@ -41,7 +43,9 @@ const uint8_t protocolError = 3;
 // Error status
 typedef enum { 
     EXIT_USAGE = 11,
-    EXIT_IMAGE_FILE = 10
+    EXIT_IMAGE_FILE = 10,
+    EXIT_CASCADE = 17,
+    EXIT_PORT = 9
 } ErrorStatus;
 
 typedef struct {
@@ -143,9 +147,79 @@ void temp_img_file_check() {
     }
 }
 
+void check_cascade_loads() {
+    CvHaarClassifierCascade* faceCascade = (CvHaarClassifierCascade*)cvLoad(faceCascadeFilename, NULL, NULL, NULL);
+    CvHaarClassifierCascade* eyesCascade = (CvHaarClassifierCascade*)cvLoad(eyesCascadeFilename, NULL, NULL, NULL);
+    
+    if (!faceCascade || !eyesCascade) {
+        fprintf(stderr, cascadeErrorMsg);
+        exit(EXIT_CASCADE);
+    }
+}
+
+void port_error(char* port) {
+    fprintf(stderr, portErrorMsg, port);
+    exit(EXIT_PORT);
+}
+
+int start_server(char* port) {
+    struct addrinfo* ai = 0;                                                     
+    struct addrinfo hints;                                                       
+
+    memset (&hints, 0, sizeof(struct addrinfo));                                 
+    hints.ai_family=AF_INET;        // IPv4  for generic could use AF_UNSPEC     
+    hints.ai_socktype=SOCK_STREAM;                                               
+    hints.ai_flags=AI_PASSIVE;  // Because we want to bind with it on all        
+                                // of our interfaces (if first argument          
+                                // to getaddrinfo() is NULL)                     
+    int err;                                                                     
+    if ((err=getaddrinfo(NULL, port, &hints, &ai))) {                            
+        freeaddrinfo(ai);                                                        
+        port_error(port);  // could not work out the address                            
+    }                                                                            
+                                                                                 
+    // create a socket and bind it to a port                                     
+    int serverFd = socket(AF_INET, SOCK_STREAM, 0); // 0 == use default protocol     
+    if (bind(serverFd, ai->ai_addr, sizeof(struct sockaddr))) {                      
+        port_error(port);                                                               
+    }                                                                            
+    
+    if (listen(serverFd, 10) != 0) {
+        port_error(port);
+    }
+
+    // Which port did we get?                                                    
+    struct sockaddr_in ad;                                                       
+    memset(&ad, 0, sizeof(struct sockaddr_in));                                  
+    socklen_t len=sizeof(struct sockaddr_in);                                    
+    if (getsockname(serverFd, (struct sockaddr*)&ad, &len)) {                        
+        port_error(port); 
+    }                                                                            
+    
+    fprintf(stderr, "%d\n", ntohs(ad.sin_port));
+    fflush(stderr);
+     
+    return serverFd; 
+}
+
+void accept_clients(int serverFd) {
+    int connFd;                                                                 
+    char* msg="Thanks for dropping by!\n";                                       
+    // change 0, 0 on next line to get info about other end                      
+    while (connFd = accept(serverFd, 0, 0), connFd >= 0) {                         
+        FILE* stream = fdopen(connFd, "w");                                     
+        fputs(msg, stream);                                                      
+        fflush(stream);                                                          
+        fclose(stream);                                                          
+    } 
+}
+
 int main(int argc, char* argv[])
 {
     CmdLineParams params = parse_command_line(argc, argv);
-    print_cmd(&params);
+//    print_cmd(&params);
     temp_img_file_check();
+    check_cascade_loads();
+    int serverFd = start_server(params.port); 
+    accept_clients(serverFd);
 }
