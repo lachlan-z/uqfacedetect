@@ -8,6 +8,7 @@
 // Error messages
 const char* const usageErrorMsg
         = "Usage: ./uqfacedetect connectionlimit maxsize [port]\n";
+const char* const imageFileErrorMsg = "uqfacedetect: cannot open image file for writing\n";
 
 // Communication protocol constants
 const uint32_t protocolPrefix = 0x23107231;
@@ -17,7 +18,10 @@ const uint8_t protocolOutput = 2;
 const uint8_t protocolError = 3;
 
 // Error status
-typedef enum { EXIT_USAGE = 11 } ErrorStatus;
+typedef enum { 
+    EXIT_USAGE = 11,
+    EXIT_IMAGE_FILE = 10
+} ErrorStatus;
 
 typedef struct {
     int connectionLimit;
@@ -109,8 +113,18 @@ CmdLineParams parse_command_line(int argc, char* argv[])
     return params;
 }
 
+void temp_img_file_check() {
+    FILE* file = fopen("/tmp/imagefile.jpg", "wb");
+
+    if (!file) {
+        fprintf(stderr, imageFileErrorMsg);
+        exit(EXIT_IMAGE_FILE);
+    }
+}
+
 int main(int argc, char* argv[])
 {
     CmdLineParams params = parse_command_line(argc, argv);
-    print_cmd(&params);
+    //print_cmd(&params);
+    temp_img_file_check();
 }
