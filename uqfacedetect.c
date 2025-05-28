@@ -4,6 +4,27 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <stdint.h>
+#include <opencv2/imgcodecs/imgcodecs_c.h>
+#include <opencv2/imgproc/imgproc_c.h>
+#include <opencv2/objdetect/objdetect_c.h>
+
+// OpenCV parameters
+const float haarScaleFactor = 1.1;
+const int haarMinNeighbours = 4;
+const int haarFlags = 0;
+const int haarMinSize = 0;
+const int haarMaxSize = 1000;
+const int ellipseStartAngle = 0;
+const int ellipseEndAngle = 360;
+const int lineThickness = 4;
+const int lineType = 8;
+const int shift = 0;
+const int bgraChannels = 4;
+const int alphaIndex = 3;
+
+// File locations
+const char* const faceCascadeFilename = "/local/courses/csse2310/resources/a4/haarcascade_frontalface_alt2.xml";
+const char* const eyesCascadeFilename = "/local/courses/csse2310/resources/a4/haarcascade_eye_tree_eyeglasses.xml";
 
 // Error messages
 const char* const usageErrorMsg
@@ -125,6 +146,6 @@ void temp_img_file_check() {
 int main(int argc, char* argv[])
 {
     CmdLineParams params = parse_command_line(argc, argv);
-    //print_cmd(&params);
+    print_cmd(&params);
     temp_img_file_check();
 }

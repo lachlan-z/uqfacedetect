@@ -1,7 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -pedantic -std=gnu99 -g
-INCLUDES = -I/local/courses/csse2310/include
-LIBS = -L/local/courses/csse2310/lib -ltinyexpr -lm
+LIBS = -L/usr/lib64 -lopencv_core -lopencv_imgcodecs -lopencv_objdetect -lopencv_imgproc
 
 all: uqfaceclient uqfacedetect
 
@@ -9,4 +8,4 @@ uqfaceclient: uqfaceclient.c
 	$(CC) $(CFLAGS) uqfaceclient.c -o uqfaceclient
 
 uqfacedetect: uqfacedetect.c
-	$(CC) $(CFLAGS) uqfacedetect.c -o uqfacedetect
+	$(CC) $(CFLAGS) uqfacedetect.c -o uqfacedetect $(LIBS)

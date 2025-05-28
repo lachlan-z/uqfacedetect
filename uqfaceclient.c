@@ -41,6 +41,7 @@ typedef enum {
     EXIT_SERVER = 12
 } ErrorStatus;
 
+// Struct to store cmd line parameters
 typedef struct {
     char* port;
     char* replaceFileName;
@@ -92,6 +93,7 @@ void check_empty_value(char* value)
  * argv: argument vector.
  *
  * Returns: Initialised CmdLineParams struct with parsed options
+ * Errors: Can return a usage error msg to stderr and exit with status 19
  */
 CmdLineParams parse_command_line(int argc, char* argv[])
 {
@@ -176,6 +178,16 @@ FILE* determine_output_source(CmdLineParams params)
     return output;
 }
 
+/* connect_to_server()
+ * −−−−−−−−−−−−−−−
+ * Connects to a local server on the specified port.
+ *
+ * port: a string representing the port number to connect to.
+ *
+ * Returns: a socket fd connected to the server, or -1 if address could not be
+ * worked out. Errors: If the socket fails to connect, prints an error message
+ * and exits with EXIT_PORT_FAIL.
+ */
 int connect_to_server(char* port)
 {
     struct addrinfo* ai = 0;
@@ -198,6 +210,16 @@ int connect_to_server(char* port)
     return fd;
 }
 
+/* read_data()
+ * −−−−−−−−−−−−−−−
+ * Reads all binary data from the specified file stream into a dynamically
+ * allocated buffer.
+ *
+ * file: a valid FILE pointer opened for reading binary data
+ * outputSize: a pointer to a uint32_t that will be set to the size of the file
+ *
+ * Returns: a pointer to a buffer containing the file's contents
+ */
 uint8_t* read_data(FILE* file, uint32_t* outputSize)
 {
     uint32_t capacity = 1048;
@@ -222,6 +244,33 @@ uint8_t* read_data(FILE* file, uint32_t* outputSize)
     return buffer;
 }
 
+/* comm_error()
+ * ------------------
+ * Prints commErrorMsg to stdout and exits with comm error status.
+ *
+ * Errors: commErrorMsg and exit status.
+ */
+void comm_error()
+{
+    fprintf(stderr, commErrorMsg);
+    exit(EXIT_COMM);
+}
+
+/* send_request()
+ * −−−−−−−−−−−−−−−
+ * Sends a request over the socket using the defined protocol, if the operation
+ * is a replacement, includes a second image.
+ *
+ * socketFd: a valid socket fd connected to the server
+ * op: operation code for the type of request to send
+ * img1Data: pointer to the first image's binary data
+ * img1Size: size of the first image
+ * img2Data: pointer to the second image's binary data if op is a replacement
+ * img2Size: size of the second image if op is a replacement
+ *
+ * Errors: If any write operation to the server fails, prints an error message
+ *         and exits with EXIT_COMM
+ */
 void send_request(int socketFd, uint8_t op, uint8_t* img1Data,
         uint32_t img1Size, uint8_t* img2Data, uint32_t img2Size)
 {
@@ -232,20 +281,30 @@ void send_request(int socketFd, uint8_t op, uint8_t* img1Data,
             || fwrite(&op, sizeof(uint8_t), 1, to) != 1
             || fwrite(&img1Size, sizeof(uint32_t), 1, to) != 1
             || fwrite(img1Data, 1, img1Size, to) != img1Size) {
-        fprintf(stderr, commErrorMsg);
-        exit(EXIT_COMM);
+        comm_error();
     }
 
     if (op == protocolReplacement) {
         if (fwrite(&img2Size, sizeof(uint32_t), 1, to) != 1
                 || fwrite(img2Data, 1, img2Size, to) != img2Size) {
-            fprintf(stderr, commErrorMsg);
-            exit(EXIT_COMM);
+            comm_error();
         }
     }
     fflush(to);
 }
 
+/* response_handler()
+ * −−−−−−−−−−−−−−−
+ * Reads and interprets the server's response and writes any returned image data
+ * to the output FILE.
+ *
+ * from: FILE pointer for reading data from the server
+ * output: FILE pointer which output image data will be written
+ *
+ * Errors: If the server's response is malformed, invalid, or if any read/write
+ *         operation fails, prints an appropriate error message and exits
+ *         with EXIT_COMM or EXIT_SERVER.
+ */
 void response_handler(FILE* from, FILE* output)
 {
     uint32_t prefix;
@@ -254,46 +313,38 @@ void response_handler(FILE* from, FILE* output)
     if (fread(&prefix, sizeof(uint32_t), 1, from) != 1
             || fread(&opType, sizeof(uint8_t), 1, from) != 1
             || prefix != protocolPrefix) {
-        fprintf(stderr, commErrorMsg);
-        exit(EXIT_COMM);
     }
 
     if (opType == protocolOutput) {
         uint32_t imageSize;
         if (fread(&imageSize, sizeof(uint32_t), 1, from) != 1) {
-            fprintf(stderr, commErrorMsg);
-            exit(EXIT_COMM);
+            comm_error();
         }
 
         uint8_t* imageData = malloc(imageSize);
         if (fread(imageData, 1, imageSize, from) != imageSize || !imageData) {
-            fprintf(stderr, commErrorMsg);
-            exit(EXIT_COMM);
+            comm_error();
         }
 
         if (fwrite(imageData, 1, imageSize, output) != imageSize) {
-            fprintf(stderr, commErrorMsg);
-            exit(EXIT_COMM);
+            comm_error();
         }
     } else if (opType == protocolError) {
         uint32_t errorSize;
         if (fread(&errorSize, sizeof(uint32_t), 1, from) != 1) {
-            fprintf(stderr, commErrorMsg);
-            exit(EXIT_COMM);
+            comm_error();
         }
 
         char* errorMsg = malloc(errorSize + 1);
         if (fread(errorMsg, 1, errorSize, from) != errorSize || !errorMsg) {
-            fprintf(stderr, commErrorMsg);
-            exit(EXIT_COMM);
+            comm_error();
         }
 
         errorMsg[errorSize] = '\0';
         fprintf(stderr, serverErrorMsg, errorMsg);
         exit(EXIT_SERVER);
     } else {
-        fprintf(stderr, commErrorMsg);
-        exit(EXIT_COMM);
+        comm_error();
     }
 }
 
