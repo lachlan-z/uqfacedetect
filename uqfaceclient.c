@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <netdb.h> 
+#include <netdb.h>
 #include <unistd.h>
 
 // Command line args
@@ -13,11 +13,16 @@ const char* const outputArg = "--output";
 const char* const usageErrorMsg
         = "Usage: ./uqfaceclient port [--replacefilename filename] "
           "[--detectimage filename] [--output filename]\n";
-const char* const replaceFileErrorMsg = "uqfaceclient: cannot open the input file \"%s\" for reading\n";
-const char* const outputFileErrorMsg = "uqfaceclient: cannot open the output file \"%s\" for writing\n";
-const char* const portFailErrorMsg = "uqfaceclient: cannot connect to the server on port \"%s\"\n";
-const char* const commErrorMsg = "uqfaceclient: a communication error occurred\n";
-const char* const serverErrorMsg = "uqfaceclient: received the following error message: \"%s\"\n"; 
+const char* const replaceFileErrorMsg
+        = "uqfaceclient: cannot open the input file \"%s\" for reading\n";
+const char* const outputFileErrorMsg
+        = "uqfaceclient: cannot open the output file \"%s\" for writing\n";
+const char* const portFailErrorMsg
+        = "uqfaceclient: cannot connect to the server on port \"%s\"\n";
+const char* const commErrorMsg
+        = "uqfaceclient: a communication error occurred\n";
+const char* const serverErrorMsg
+        = "uqfaceclient: received the following error message: \"%s\"\n";
 
 // Communication protocol structs and constants
 const uint32_t protocolPrefix = 0x23107231;
@@ -43,7 +48,8 @@ typedef struct {
     char* outputFileName;
 } CmdLineParams;
 
-void print_cmd(CmdLineParams* params) {
+void print_cmd(CmdLineParams* params)
+{
     printf("CmdLineParams:\n");
     printf("    port: %s\n", params->port);
     printf("    replaceFileName: %s\n", params->replaceFileName);
@@ -54,23 +60,25 @@ void print_cmd(CmdLineParams* params) {
 /* usage_error()
  * ------------------
  * Prints usageErrorMsg to stdout and exits with usage error status.
- * 
+ *
  * Errors: usageErrorMsg and exit status.
  */
-void usage_error() {
+void usage_error()
+{
     fprintf(stderr, usageErrorMsg);
     exit(EXIT_USAGE);
 }
 
 /* check_empty_value()
- * ------------------ 
+ * ------------------
  * Checks if a value is empty string or NULL.
  *
  * value: char* value to check.
  *
  * Errors: usageErrorMsg and status if true.
  */
-void check_empty_value(char* value) {
+void check_empty_value(char* value)
+{
     if (strcmp(value, "") == 0 || value == NULL) {
         usage_error();
     }
@@ -88,10 +96,10 @@ void check_empty_value(char* value) {
 CmdLineParams parse_command_line(int argc, char* argv[])
 {
     CmdLineParams params = {0};
-     
+
     argc--;
     argv++;
-    
+
     if (argv[0] && strncmp(argv[0], "--", 2) != 0) {
         check_empty_value(argv[0]);
         params.port = argv[0];
@@ -130,7 +138,7 @@ CmdLineParams parse_command_line(int argc, char* argv[])
         argc -= 2;
         argv += 2;
     }
-     
+
     return params;
 }
 
@@ -168,28 +176,30 @@ FILE* determine_output_source(CmdLineParams params)
     return output;
 }
 
-int connect_to_server(char* port) {
-   struct addrinfo* ai = 0;
-   struct addrinfo hints;
-   memset(& hints, 0, sizeof(struct addrinfo));
-   hints.ai_family=AF_INET;        // IPv4, for generic could use AF_UNSPEC
-   hints.ai_socktype=SOCK_STREAM;
-   int err;
-   if ((err=getaddrinfo("localhost", port, &hints, &ai))) {
-         freeaddrinfo(ai);
-         fprintf(stderr, "%s\n", gai_strerror(err));
-         return -1;   // could not work out the address
-   }
+int connect_to_server(char* port)
+{
+    struct addrinfo* ai = 0;
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_INET; // IPv4, for generic could use AF_UNSPEC
+    hints.ai_socktype = SOCK_STREAM;
+    int err;
+    if ((err = getaddrinfo("localhost", port, &hints, &ai))) {
+        freeaddrinfo(ai);
+        fprintf(stderr, "%s\n", gai_strerror(err));
+        return -1; // could not work out the address
+    }
 
-   int fd=socket(AF_INET, SOCK_STREAM, 0); // 0 == use default protocol
-   if (connect(fd, ai->ai_addr, sizeof(struct sockaddr))) {
-       fprintf(stderr, portFailErrorMsg, port);
-       exit(EXIT_PORT_FAIL);
-   }
-   return fd;
+    int fd = socket(AF_INET, SOCK_STREAM, 0); // 0 == use default protocol
+    if (connect(fd, ai->ai_addr, sizeof(struct sockaddr))) {
+        fprintf(stderr, portFailErrorMsg, port);
+        exit(EXIT_PORT_FAIL);
+    }
+    return fd;
 }
 
-uint8_t* read_data(FILE* file, uint32_t* outputSize) {
+uint8_t* read_data(FILE* file, uint32_t* outputSize)
+{
     uint32_t capacity = 1048;
     uint32_t totalRead = 0;
     uint8_t* buffer = malloc(capacity);
@@ -201,7 +211,8 @@ uint8_t* read_data(FILE* file, uint32_t* outputSize) {
             buffer = newBuff;
         }
 
-        size_t bytesRead = fread(buffer + totalRead, 1, capacity - totalRead, file);
+        size_t bytesRead
+                = fread(buffer + totalRead, 1, capacity - totalRead, file);
         if (bytesRead == 0) {
             break;
         }
@@ -209,23 +220,25 @@ uint8_t* read_data(FILE* file, uint32_t* outputSize) {
     }
     *outputSize = totalRead;
     return buffer;
-} 
+}
 
-void send_request(int socketFd, uint8_t op, uint8_t* img1Data, uint32_t img1Size, uint8_t* img2Data, uint32_t img2Size) {
+void send_request(int socketFd, uint8_t op, uint8_t* img1Data,
+        uint32_t img1Size, uint8_t* img2Data, uint32_t img2Size)
+{
     int sendFd = dup(socketFd);
     FILE* to = fdopen(sendFd, "wb");
 
-    if (fwrite(&protocolPrefix, sizeof(uint32_t), 1, to) != 1 ||
-        fwrite(&op, sizeof(uint8_t), 1, to) != 1 ||
-        fwrite(&img1Size, sizeof(uint32_t), 1, to) != 1 ||
-        fwrite(img1Data, 1, img1Size, to) != img1Size) {
+    if (fwrite(&protocolPrefix, sizeof(uint32_t), 1, to) != 1
+            || fwrite(&op, sizeof(uint8_t), 1, to) != 1
+            || fwrite(&img1Size, sizeof(uint32_t), 1, to) != 1
+            || fwrite(img1Data, 1, img1Size, to) != img1Size) {
         fprintf(stderr, commErrorMsg);
         exit(EXIT_COMM);
     }
 
     if (op == protocolReplacement) {
-        if (fwrite(&img2Size, sizeof(uint32_t), 1, to) != 1 ||
-            fwrite(img2Data, 1, img2Size, to) != img2Size) {
+        if (fwrite(&img2Size, sizeof(uint32_t), 1, to) != 1
+                || fwrite(img2Data, 1, img2Size, to) != img2Size) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
         }
@@ -233,49 +246,50 @@ void send_request(int socketFd, uint8_t op, uint8_t* img1Data, uint32_t img1Size
     fflush(to);
 }
 
-void response_handler(FILE* from, FILE* output) {
+void response_handler(FILE* from, FILE* output)
+{
     uint32_t prefix;
-    uint8_t op_type;
+    uint8_t opType;
 
-    if (fread(&prefix, sizeof(uint32_t), 1, from) != 1 ||
-        fread(&op_type, sizeof(uint8_t), 1, from) != 1 ||
-        prefix != protocolPrefix) {
+    if (fread(&prefix, sizeof(uint32_t), 1, from) != 1
+            || fread(&opType, sizeof(uint8_t), 1, from) != 1
+            || prefix != protocolPrefix) {
         fprintf(stderr, commErrorMsg);
         exit(EXIT_COMM);
     }
 
-    if (op_type == protocolOutput) {
-        uint32_t image_size;
-        if (fread(&image_size, sizeof(uint32_t), 1, from) != 1) {
+    if (opType == protocolOutput) {
+        uint32_t imageSize;
+        if (fread(&imageSize, sizeof(uint32_t), 1, from) != 1) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
         }
 
-        uint8_t* image_data = malloc(image_size);
-        if (fread(image_data, 1, image_size, from) != image_size || !image_data) {
+        uint8_t* imageData = malloc(imageSize);
+        if (fread(imageData, 1, imageSize, from) != imageSize || !imageData) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
         }
 
-        if (fwrite(image_data, 1, image_size, output) != image_size) {
+        if (fwrite(imageData, 1, imageSize, output) != imageSize) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
-        } 
-    } else if (op_type == protocolError) {
-        uint32_t error_size;
-        if (fread(&error_size, sizeof(uint32_t), 1, from) != 1) {
+        }
+    } else if (opType == protocolError) {
+        uint32_t errorSize;
+        if (fread(&errorSize, sizeof(uint32_t), 1, from) != 1) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
         }
 
-        char* error_msg = malloc(error_size + 1);
-        if (fread(error_msg, 1, error_size, from) != error_size || !error_msg) {
+        char* errorMsg = malloc(errorSize + 1);
+        if (fread(errorMsg, 1, errorSize, from) != errorSize || !errorMsg) {
             fprintf(stderr, commErrorMsg);
             exit(EXIT_COMM);
         }
 
-        error_msg[error_size] = '\0';
-        fprintf(stderr, serverErrorMsg, error_msg);
+        errorMsg[errorSize] = '\0';
+        fprintf(stderr, serverErrorMsg, errorMsg);
         exit(EXIT_SERVER);
     } else {
         fprintf(stderr, commErrorMsg);
@@ -283,36 +297,37 @@ void response_handler(FILE* from, FILE* output) {
     }
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
     CmdLineParams params = parse_command_line(argc, argv);
-    
+
     uint8_t operation;
     FILE* detectInput = NULL;
     FILE* replaceInput = NULL;
     uint8_t* img1Data = NULL;
     uint8_t* img2Data = NULL;
-    uint32_t img1Size = 0; 
+    uint32_t img1Size = 0;
     uint32_t img2Size = 0;
     FILE* output = determine_output_source(params);
-    
+
     if (params.replaceFileName) {
         operation = protocolReplacement;
-        
+
         detectInput = determine_input_source(params.detectFileName);
         replaceInput = determine_input_source(params.replaceFileName);
-        
+
         img1Data = read_data(detectInput, &img1Size);
         img2Data = read_data(replaceInput, &img2Size);
     } else {
         operation = protocolDetection;
-        
+
         detectInput = determine_input_source(params.detectFileName);
         img1Data = read_data(detectInput, &img1Size);
-    }    
+    }
     int socketFd = connect_to_server(params.port);
 
     send_request(socketFd, operation, img1Data, img1Size, img2Data, img2Size);
-    
+
     int receiveFd = dup(socketFd);
     FILE* from = fdopen(receiveFd, "rb");
     response_handler(from, output);
