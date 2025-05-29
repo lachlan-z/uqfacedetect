@@ -49,15 +49,6 @@ typedef struct {
     char* outputFileName;
 } CmdLineParams;
 
-void print_cmd(CmdLineParams* params)
-{
-    printf("CmdLineParams:\n");
-    printf("    port: %s\n", params->port);
-    printf("    replaceFileName: %s\n", params->replaceFileName);
-    printf("    detectFileName: %s\n", params->detectFileName);
-    printf("    outputFileName: %s\n", params->outputFileName);
-}
-
 /* usage_error()
  * ------------------
  * Prints usageErrorMsg to stdout and exits with usage error status.

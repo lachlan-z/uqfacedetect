@@ -60,14 +60,6 @@ typedef struct {
     char* port;
 } CmdLineParams;
 
-void print_cmd(CmdLineParams* params)
-{
-    printf("CmdLineParams:\n");
-    printf("    connectionLimit: %d\n", params->connectionLimit);
-    printf("    maxSize: %u\n", params->maxSize);
-    printf("    port: %s\n", params->port);
-}
-
 /* usage_error()
  * ------------------
  * Prints usageErrorMsg to stdout and exits with usage error status.
