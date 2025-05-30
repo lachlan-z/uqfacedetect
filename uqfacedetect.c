@@ -7,6 +7,19 @@
 #include <opencv2/imgcodecs/imgcodecs_c.h>
 #include <opencv2/imgproc/imgproc_c.h>
 #include <opencv2/objdetect/objdetect_c.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+
+#define MAX_ARGS 4
+#define MIN_ARGS 3
+#define MIN_CONNECTIONS 0
+#define MAX_CONNECTIONS 10000
+#define BASE_TEN 10
+#define PORT_POS 3
+#define KILO 1024
 
 // OpenCV parameters
 const float haarScaleFactor = 1.1;
@@ -27,6 +40,8 @@ const char* const faceCascadeFilename = "/local/courses/csse2310/resources/a4/"
                                         "haarcascade_frontalface_alt2.xml";
 const char* const eyesCascadeFilename = "/local/courses/csse2310/resources/a4/"
                                         "haarcascade_eye_tree_eyeglasses.xml";
+const char* const responseFile
+        = "/local/courses/csse2310/resources/a4/responsefile";
 
 // Error messages
 const char* const usageErrorMsg
@@ -103,20 +118,20 @@ CmdLineParams parse_command_line(int argc, char* argv[])
     argc--;
     argv++;
 
-    if (argc < 2 || argc > 3) {
+    if (argc < MIN_ARGS || argc > MAX_ARGS) {
         usage_error();
     }
 
     check_empty_value(argv[0]);
     int connections = atoi(argv[0]);
-    if (connections < 0 || connections > 10000) {
+    if (connections < MIN_CONNECTIONS || connections > MAX_CONNECTIONS) {
         usage_error();
     }
     params.connectionLimit = connections;
 
     check_empty_value(argv[1]);
     char* stopString;
-    unsigned long maxSizeVal = strtoul(argv[1], &stopString, 10);
+    unsigned long maxSizeVal = strtoul(argv[1], &stopString, BASE_TEN);
     if (*stopString != '\0' || maxSizeVal > UINT32_MAX) {
         usage_error();
     }
@@ -127,7 +142,7 @@ CmdLineParams parse_command_line(int argc, char* argv[])
         params.maxSize = (uint32_t)maxSizeVal;
     }
 
-    if (argc == 3) {
+    if (argc == PORT_POS) {
         check_empty_value(argv[2]);
         params.port = argv[2];
     } else {
@@ -147,9 +162,9 @@ CmdLineParams parse_command_line(int argc, char* argv[])
 void temp_img_file_check()
 {
     FILE* file = fopen("/tmp/imagefile.jpg", "wb");
-    int close_check = fclose(file);
+    int closeCheck = fclose(file);
 
-    if (!file || close_check != 0) {
+    if (!file || closeCheck != 0) {
         fprintf(stderr, imageFileErrorMsg);
         exit(EXIT_IMAGE_FILE);
     }
@@ -239,29 +254,89 @@ int start_server(char* port)
     return serverFd;
 }
 
-/* accept_clients()
+/* client_thread()
  * −−−−−−−−−−−−−−−
- * Accepts incoming client connections in a loop on the given server socket fd.
+ * Handles communication with a single client in a separate thread.
  *
- * serverFd: a valid socket fd.
+ * arg: a pointer to client socket fd.
+ *
+ * Errors:
  */
-void accept_clients(int serverFd)
+void* client_thread(void* arg)
 {
-    int connFd;
-    // change 0, 0 on next line to get info about other end
-    while (connFd = accept(serverFd, 0, 0), connFd >= 0) {
-        FILE* stream = fdopen(connFd, "w");
-        fflush(stream);
-        fclose(stream);
+    char buffer[KILO];
+    ssize_t numBytesRead;
+    int fd = *(int*)arg;
+    free(arg);
+
+    // Send a welcome message to our client
+    dprintf(fd, "Welcome\n");
+
+    // Repeatedly read data arriving from client - turn it to upper case - send
+    // it back
+    while ((numBytesRead = read(fd, buffer, KILO)) > 0) {
+        write(fd, buffer, numBytesRead);
+    }
+
+    // Error or EOF - client disconnected
+    if (numBytesRead < 0) {
+        perror("Error reading from socket");
+        exit(1);
+    }
+
+    // Print a message to server's stdout
+    fflush(stdout);
+    close(fd);
+    return NULL; // Could have called pthread_exit(NULL);
+}
+
+/* process_connections()
+ * −−−−−−−−−−−−−−−
+ * Accepts incoming client connections on the given server socket and spawns a
+ * new thread to handle each connection using client_thread().
+ *
+ * fdServer: the socket file descriptor returned by start_server().
+ */
+void process_connections(int fdServer)
+{
+    int fd;
+    struct sockaddr_in fromAddr;
+    socklen_t fromAddrSize;
+
+    // Repeatedly accept connections and process data (capitalise)
+    while (1) {
+        fromAddrSize = sizeof(struct sockaddr_in);
+
+        // Block, waiting for a new connection (fromAddr will be populated with
+        // client address)
+        fd = accept(fdServer, (struct sockaddr*)&fromAddr, &fromAddrSize);
+        if (fd < 0) {
+            perror("Error accepting connection");
+            exit(1);
+        }
+
+        // Turn our client address into a hostname and print address, hostname
+        // and port
+        // char hostname[NI_MAXHOST];
+        // int error = getnameinfo((struct sockaddr*)&fromAddr, fromAddrSize,
+        //         hostname, NI_MAXHOST, NULL, 0, 0);
+
+        // Create a thread to deal with client
+        int* data = malloc(sizeof(int));
+        *data = fd;
+        pthread_t threadID;
+        pthread_create(&threadID, NULL, client_thread, data);
+        pthread_detach(threadID);
     }
 }
 
 int main(int argc, char* argv[])
 {
     CmdLineParams params = parse_command_line(argc, argv);
-    //print_cmd(&params);
+    // print_cmd(&params);
     temp_img_file_check();
     check_cascade_loads();
     int serverFd = start_server(params.port);
-    accept_clients(serverFd);
+    process_connections(serverFd);
+    // accept_clients(serverFd);
 }

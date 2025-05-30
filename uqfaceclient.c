@@ -4,6 +4,8 @@
 #include <netdb.h>
 #include <unistd.h>
 
+#define KILO 1024
+
 // Command line args
 const char* const replaceArg = "--replacefilename";
 const char* const detectArg = "--detectimage";
@@ -213,7 +215,7 @@ int connect_to_server(char* port)
  */
 uint8_t* read_data(FILE* file, uint32_t* outputSize)
 {
-    uint32_t capacity = 1048;
+    uint32_t capacity = KILO;
     uint32_t totalRead = 0;
     uint8_t* buffer = malloc(capacity);
 
