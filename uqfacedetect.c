@@ -14,7 +14,8 @@
 #include <pthread.h>
 
 #define MAX_ARGS 4
-#define MIN_ARGS 3
+#define PORT_ARG 3
+#define MIN_ARGS 2
 #define MIN_CONNECTIONS 0
 #define MAX_CONNECTIONS 10000
 #define BASE_TEN 10
@@ -142,7 +143,7 @@ CmdLineParams parse_command_line(int argc, char* argv[])
         params.maxSize = (uint32_t)maxSizeVal;
     }
 
-    if (argc == PORT_POS) {
+    if (argc == PORT_ARG) {
         check_empty_value(argv[2]);
         params.port = argv[2];
     } else {
@@ -260,34 +261,49 @@ int start_server(char* port)
  *
  * arg: a pointer to client socket fd.
  *
- * Errors:
+ * REF: ChatGPT used for prefix checking logic and send the contents of
+ * responsefile
  */
 void* client_thread(void* arg)
 {
-    char buffer[KILO];
-    ssize_t numBytesRead;
     int fd = *(int*)arg;
-    free(arg);
+    free(arg); // malloc used before pthread_create
 
-    // Send a welcome message to our client
-    dprintf(fd, "Welcome\n");
+    uint8_t prefixBytes[sizeof(uint32_t)];
+    size_t received = 0;
+    ssize_t r;
 
-    // Repeatedly read data arriving from client - turn it to upper case - send
-    // it back
-    while ((numBytesRead = read(fd, buffer, KILO)) > 0) {
-        write(fd, buffer, numBytesRead);
+    while (received < sizeof(uint32_t)) {
+        r = read(fd, prefixBytes + received, sizeof(uint32_t) - received);
+        if (r <= 0) {
+            close(fd);
+            return NULL;
+        }
+        received += r;
     }
 
-    // Error or EOF - client disconnected
-    if (numBytesRead < 0) {
-        perror("Error reading from socket");
-        exit(1);
+    // Convert bytes to uint32_t little-endian
+    uint32_t prefix = 0;
+    for (int i = 0; i < (int)sizeof(uint32_t); i++) {
+        prefix |= ((uint32_t)prefixBytes[i]) << ((sizeof(uint32_t) * 2) * i);
     }
 
-    // Print a message to server's stdout
-    fflush(stdout);
+    if (prefix != protocolPrefix) {
+        FILE* f = fopen(responseFile ? responseFile : "responsefile", "rb");
+        if (f) {
+            char buf[KILO];
+            size_t n;
+            while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+                write(fd, buf, n);
+            }
+            fclose(f);
+        }
+        close(fd);
+        return NULL;
+    }
+
     close(fd);
-    return NULL; // Could have called pthread_exit(NULL);
+    return NULL;
 }
 
 /* process_connections()
